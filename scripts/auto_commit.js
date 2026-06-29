@@ -55,7 +55,7 @@ async function sendTelegramAlert(message) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: telegramChatId,
-        text: `⚠️ GitHub Commit Bot Alert:\n\n${message}\n\nCheck your GitHub Action logs for details.`,
+        text: message,
         parse_mode: 'HTML'
       })
     });
@@ -83,7 +83,7 @@ async function run() {
       const userProfileRes = await githubApi(`/users/${owner}`);
       if (userProfileRes.status === 200) {
         authorName = userProfileRes.data.name || owner;
-        authorEmail = userProfileRes.data.email || `${userProfileRes.data.id}+\n${owner}@users.noreply.github.com`;
+        authorEmail = userProfileRes.data.email || `${userProfileRes.data.id}+${owner}@users.noreply.github.com`;
       }
     } catch (profileErr) {
       console.warn("Could not fetch user profile for attribution, using fallback email:", profileErr.message);
@@ -155,9 +155,7 @@ async function run() {
       streakData.last_commit_date = dateStr;
     }
 
-    if (!streakData.history.includes(dateStr)) {
-      streakData.history.push(dateStr);
-    }
+    streakData.history.push(dateStr);
 
     const streakBody = {
       message: `update streak.json ${dateStr}`,
@@ -175,16 +173,20 @@ async function run() {
       streakBody.sha = streakSha;
     }
 
-    console.log(`Updating ${streakPath} backup...`);
+    console.log(`Updating ${streakPath} backup in repository...`);
     await githubApi(`/repos/${owner}/${repoName}/contents/${streakPath}`, {
       method: 'PUT',
       body: JSON.stringify(streakBody)
     });
-    console.log("Streak backup updated!");
+    console.log("Streak backup updated successfully!");
+
+    // Send success Telegram notification if configured
+    await sendTelegramAlert(`🤖 <b>GitHub Commit Bot</b>\n\n✅ <b>Daily Commit Successful!</b>\n\nCompleted daily commits to <b>${repo}</b>.\nStreak: <b>${streakData.streak} days</b> 🔥`);
 
   } catch (error) {
     console.error("Automation Error:", error.message);
-    await sendTelegramAlert(`❌ Daily Commit Automation failed!\n\n<b>Error:</b> ${error.message}`);
+    // Send Telegram alert if configured
+    await sendTelegramAlert(`⚠️ <b>GitHub Commit Bot Alert</b>\n\n❌ Daily Commit Automation failed!\n\n<b>Error:</b> ${error.message}\n\nCheck your GitHub Action logs for details.`);
     process.exit(1);
   }
 }
